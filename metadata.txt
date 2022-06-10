@@ -9,12 +9,12 @@ qgisMinimumVersion=3.0
 description=This plugin add the Memplex MET as layers
 version=0.1
 author=Sören Wirries
-email=soeren@swirries.de
+email=soeren-dev@swirries.de
 
-about=Provide a brief description of the plugin and its purpose. This plugin convertes the MEMPLEX MET export to layers on inside QGIS
+about=This plugin convertes the MEMPLEX MET export to layers inside QGIS
 
-tracker=http://bugs
-repository=http://repo
+tracker=https://github.com/zorsin/qgis-cbrn-hn-memplex-met
+repository=https://github.com/zorsin/qgis-cbrn-hn-memplex-met
 # End of mandatory metadata
 
 # Recommended items:
@@ -26,7 +26,7 @@ hasProcessingProvider=no
 # Tags are comma separated with spaces allowed
 tags=import, polygon, point, python
 
-homepage=http://homepage
+homepage=https://github.com/zorsin/qgis-cbrn-hn-memplex-met
 category=Plugins
 icon=icon.png
 # experimental flag

@@ -21,16 +21,21 @@
  *                                                                         *
  ***************************************************************************/
 """
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
-from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QVariant
+from qgis.PyQt.QtGui import QIcon, QColor
+from qgis.PyQt.QtWidgets import QAction, QApplication
+from qgis.core import Qgis, QgsVectorLayer, QgsFeature, QgsField, QgsGeometry, QgsPointXY, QgsProject, QgsDistanceArea, QgsLayerTreeLayer
+import re
+import math
+from datetime import datetime
+import configparser
+import os.path
 
 # Initialize Qt resources from file resources.py
 from .resources import *
 # Import the code for the dialog
 from .cbrn_hn_memplex_met_dialog import CBRNHNMemplexMETDialog
-import os.path
-
+from .maptool import PointTool
 
 class CBRNHNMemplexMET:
     """QGIS Plugin Implementation."""
@@ -81,7 +86,6 @@ class CBRNHNMemplexMET:
         """
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
         return QCoreApplication.translate('CBRNHNMemplexMET', message)
-
 
     def add_action(
         self,
@@ -170,7 +174,6 @@ class CBRNHNMemplexMET:
         # will be set False in run()
         self.first_start = True
 
-
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
@@ -178,7 +181,6 @@ class CBRNHNMemplexMET:
                 self.tr(u'&CBRN Memplex MET'),
                 action)
             self.iface.removeToolBarIcon(action)
-
 
     def run(self):
         """Run method that performs all the real work"""
@@ -188,13 +190,185 @@ class CBRNHNMemplexMET:
         if self.first_start == True:
             self.first_start = False
             self.dlg = CBRNHNMemplexMETDialog()
+            self.dlg.finished.connect(self.result)
+            self.dlg.file_input.setFilter("*.txt;;*.*")
+            self.dlg.file_input.setFilePath("")
+            self.dlg.start_point.setText("")
+            self.dlg.map_button.setIcon(QIcon(":images/themes/default/cursors/mCapturePoint.svg"))
+            self.dlg.map_button.clicked.connect(self._on_map_click)
+            self.dlg.spread_type.clear()
+            self.dlg.spread_type.addItems(["Sofortige Freisetzung", "Lachenverdampfung", "Kontinuierliche Freisetzung"])
+            
+            config = configparser.ConfigParser()
+            config.read(os.path.join(os.path.dirname(__file__), "config.ini"))
+            
+            self.dlg.vehicle.setText(config['DEFAULT'].get('vehicle'))
+            self.dlg.file_input.setFilePath(config['DEFAULT'].get('met_path'))
 
+            if config['DEFAULT'].getboolean('demo'):
+                self.dlg.editor.setText(config['DEMO'].get('editor'))
+                self.dlg.location.setText(config['DEMO'].get('location'))
+                self.dlg.number.setText(config['DEMO'].get('number'))
+                self.dlg.start_point.setText(config['DEMO'].get('start'))
         # show the dialog
+        self.dlg.open()
+
+    
+    def _on_map_click(self):
+        self.dlg.hide()
+        self.point_tool = PointTool(self.iface.mapCanvas())
+        self.iface.mapCanvas().setMapTool(self.point_tool)
+        self.point_tool.canvasClicked.connect(self._write_line_widget)
+    
+    def _write_line_widget(self, point: QgsPointXY):
+        self.dlg.start_point.setText(f"{point.x():.6f},{point.y():.6f}")
+        self.iface.mapCanvas().unsetMapTool(self.point_tool)
         self.dlg.show()
-        # Run the dialog event loop
-        result = self.dlg.exec_()
-        # See if OK was pressed
-        if result:
-            # Do something useful here - delete the line containing pass and
-            # substitute with your code.
-            pass
+        self.point_tool.deactivated.connect(lambda: QApplication.restoreOverrideCursor())
+    
+    def result(self, result: int):
+        if result:  
+            vectorLayer = None
+            dataProvider = None
+            listOfPoints = []
+            colorRegex = re.compile("[^a-z0-9]+")
+            dictOfLayer = {}
+            distanceArea = QgsDistanceArea()
+            distanceArea.setEllipsoid("WGS84")
+            colorDict = {
+                "geruchsgrenze":[0,128,128],
+                "ex50ueg":[255,0,0],
+                "imhaus":[255,20,147],
+                "imfreien":[255,182,193],
+                "wolkenexplosionohr":[218,165,32], 
+                "wolkenexplosionglasbruch":[255,255,0], 
+                "tankexplosionohr": [101,67,33],
+                "tankexplosionglasbruch": [210,105,30],
+                "tankexplosionfragmente": [255,127,80],
+                "tankexplosiontuberockets": [255,127,0],
+                "bleve1grad": [135,206,235],
+                "bleve2grad": [106,90,205],
+                "bleveholz": [65,105,225],
+            }
+            # user inputs     
+            filename = self.dlg.file_input.filePath()
+            startingPoint = self.dlg.start_point.text()
+            windDirection = self.dlg.wind_direction.text()
+            colorAlphaPercentage = self.dlg.color_alpha_percent.value()
+
+            inputVehicle = self.dlg.vehicle.text()
+            inputEditor = self.dlg.editor.text()
+            inputLocation = self.dlg.location.text()
+            inputNumber = self.dlg.number.text()
+            inputSpreadType = self.dlg.spread_type.currentText()
+
+            colorAlpha = int(255 * (int(colorAlphaPercentage) / 100))
+            
+            startingPoints = startingPoint.split(",")
+            startLat = float(startingPoints[1])
+            startLon = float(startingPoints[0])
+            angleCorrection = (float(windDirection) - 270) / 180 * math.pi
+            
+            file = open(filename, "r")
+            #print(file.read())
+            self.iface.messageBar().pushMessage(
+                "Loading", "Importing file " + filename,
+                level=Qgis.Info, duration=6)
+            for line in file:
+                if re.match("LABEL:.?", line):
+                    if not (vectorLayer is None):
+                        fet = QgsFeature()
+                        fet.setGeometry(QgsGeometry.fromPolygonXY([listOfPoints]))
+                        dataProvider.addFeatures( [fet] )
+                        colorName = colorRegex.sub("",pointsName.lower()) 
+                        rgbColors = colorDict[colorName]
+                        vectorLayer.renderer().symbol().symbolLayer(0).setColor(QColor(rgbColors[0],rgbColors[1],rgbColors[2],colorAlpha))
+                        vectorLayer.commitChanges()
+                        dictOfLayer[distanceArea.measureArea(fet.geometry())] = vectorLayer
+                        listOfPoints = []
+
+                    pointsName = line[7:].strip()
+                    vectorLayer = QgsVectorLayer("Polygon", pointsName, "memory")
+                    dataProvider = vectorLayer.dataProvider()
+                    vectorLayer.startEditing()
+
+                if re.match("(-?[0-9.]+)\t(-?[0-9.]+)", line):
+                    metPoints = line.split("\t")
+                    east = float(metPoints[0])
+                    north = float(metPoints[1])
+
+                    if abs(east) < 1 or abs(north) < 1:
+                        continue
+
+                    angle = math.atan(north / east)
+                    # dist = east / cos(angle)
+                    distance = east / math.cos(angle)
+                    # distlat = dist * cos(angle)
+                    distLat = distance * math.cos(angle + angleCorrection)
+                    # distLon = dist * sin(angle)
+                    distLon = distance * math.sin(angle + angleCorrection)
+                    # distLatOffset = distLat / 1850
+                    distLatOffset = distLat / 1850.0
+                    # northAnlge = PI * lat / 180
+                    northAngle = math.pi * startLat / 180.0
+                    # distLonOffset = distLon / (1850 * cos(northAngle)
+                    distLonOffset = distLon / (1850.0 * math.cos(northAngle))
+                    # newLat = lat + distLatOffset/ 60
+                    lat = startLat + distLatOffset / 60.0
+                    # newLon = lon + distLonOffset / 60
+                    lon = startLon + distLonOffset / 60.0
+                    # print(lat, lon)
+                    listOfPoints.append(QgsPointXY(lon,lat))
+            # close the file after reading
+            file.close()
+            # last layer
+            fet = QgsFeature()
+            fet.setGeometry(QgsGeometry.fromPolygonXY([listOfPoints]))
+            dataProvider.addFeatures( [fet] )
+            # get the color of the layer
+            colorName = colorRegex.sub("",pointsName.lower())
+            rgbColors = colorDict[colorName]
+            # set layer color
+            vectorLayer.renderer().symbol().symbolLayer(0).setColor(QColor(rgbColors[0],rgbColors[1],rgbColors[2],colorAlpha))
+            vectorLayer.commitChanges()
+            # calc area of spread for sporting
+            dictOfLayer[distanceArea.measureArea(fet.geometry())] = vectorLayer
+            
+            # set start point
+            pointLayer = QgsVectorLayer("Point", "Start", "memory")
+            pointDataProvider = pointLayer.dataProvider()
+            pointLayer.startEditing()
+            pointDataProvider.addAttributes([
+                QgsField("Fahrzeug",QVariant.String),
+                QgsField("Bearbeiter",QVariant.String),
+                QgsField("Adresse / Einsatzort",QVariant.String),
+                QgsField("Einsatznummer",QVariant.String),
+                QgsField("Art der Freisetzung",QVariant.String),
+                ])
+            pointLayer.updateFields()
+            fet = QgsFeature(pointLayer.fields())
+            fet["Fahrzeug"] = inputVehicle
+            fet["Bearbeiter"] = inputEditor
+            fet["Adresse / Einsatzort"] = inputLocation
+            fet["Einsatznummer"] = inputNumber
+            fet["Art der Freisetzung"] = inputSpreadType
+            fet.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(startLon, startLat)))
+            pointDataProvider.addFeatures( [fet] )
+            pointLayer.renderer().symbol().symbolLayer(0).setColor(QColor(0,0,0,255))
+            pointLayer.commitChanges()
+            dictOfLayer[0] = pointLayer
+
+            # sorting and add to project
+            layerRoot = QgsProject.instance().layerTreeRoot()
+            dt_string = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            metGroup = layerRoot.insertGroup(0,"MET_"+dt_string)
+
+            for key in sorted(dictOfLayer.keys(), reverse=True):
+                QgsProject.instance().addMapLayer(dictOfLayer[key], False)
+                metGroup.insertChildNode(0, QgsLayerTreeLayer(dictOfLayer[key]))
+
+            self.iface.messageBar().pushMessage(
+                "Success", "Imported " + filename,
+                level=Qgis.Success, duration=3)
+
+    pass
