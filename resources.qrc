@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/plugins/cbrn_hn_memplex_met" >
+        <file>icon.png</file>
+    </qresource>
+</RCC>
