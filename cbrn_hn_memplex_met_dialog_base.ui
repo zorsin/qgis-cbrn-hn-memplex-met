@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>731</width>
-    <height>416</height>
+    <height>450</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,7 +17,7 @@
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>380</y>
+     <y>410</y>
      <width>711</width>
      <height>32</height>
     </rect>
@@ -162,7 +162,7 @@
      <x>10</x>
      <y>180</y>
      <width>711</width>
-     <height>201</height>
+     <height>221</height>
     </rect>
    </property>
    <property name="title">
@@ -174,7 +174,7 @@
       <x>10</x>
       <y>30</y>
       <width>691</width>
-      <height>161</height>
+      <height>178</height>
      </rect>
     </property>
     <layout class="QFormLayout" name="formLayout_4">
@@ -218,27 +218,37 @@
      <item row="3" column="1">
       <widget class="QLineEdit" name="number"/>
      </item>
-     <item row="4" column="0">
+     <item row="5" column="0">
       <widget class="QLabel" name="label_9">
        <property name="text">
         <string>Art der Freisetzung:</string>
        </property>
       </widget>
      </item>
-     <item row="4" column="1">
+     <item row="5" column="1">
       <widget class="QComboBox" name="spread_type"/>
      </item>
-     <item row="5" column="0">
+     <item row="6" column="0">
       <widget class="QLabel" name="label_10">
        <property name="text">
         <string>Datum / Uhrzeit</string>
        </property>
       </widget>
      </item>
-     <item row="5" column="1">
+     <item row="6" column="1">
       <widget class="QDateTimeEdit" name="user_datetime">
        <property name="enabled">
         <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item row="4" column="1">
+      <widget class="QLineEdit" name="chemical"/>
+     </item>
+     <item row="4" column="0">
+      <widget class="QLabel" name="label_11">
+       <property name="text">
+        <string>Stoff:</string>
        </property>
       </widget>
      </item>

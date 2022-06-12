@@ -212,6 +212,7 @@ class CBRNHNMemplexMET:
                 self.dlg.location.setText(config['DEMO'].get('location'))
                 self.dlg.number.setText(config['DEMO'].get('number'))
                 self.dlg.start_point.setText(config['DEMO'].get('start'))
+                self.dlg.chemical.setText(config['DEMO'].get('chemical'))
         # show the dialog
         self.dlg.open()
 
@@ -264,6 +265,7 @@ class CBRNHNMemplexMET:
             inputNumber = self.dlg.number.text()
             inputSpreadType = self.dlg.spread_type.currentText()
             inputTime = self.dlg.user_datetime.dateTime().toString("dd.MM.yyyy HH:mm:ss")
+            inputChemical = self.dlg.chemical.text()
 
             colorAlpha = int(255 * (int(colorAlphaPercentage) / 100))
             
@@ -348,6 +350,7 @@ class CBRNHNMemplexMET:
                 QgsField("Bearbeiter",QVariant.String),
                 QgsField("Adresse / Einsatzort",QVariant.String),
                 QgsField("Einsatznummer",QVariant.String),
+                QgsField("Stoff",QVariant.String),
                 QgsField("Art der Freisetzung",QVariant.String),
                 QgsField("Datum / Uhrzeit",QVariant.String),
                 ])
@@ -357,6 +360,7 @@ class CBRNHNMemplexMET:
             fet["Bearbeiter"] = inputEditor
             fet["Adresse / Einsatzort"] = inputLocation
             fet["Einsatznummer"] = inputNumber
+            fet["Stoff"] = inputChemical
             fet["Art der Freisetzung"] = inputSpreadType
             fet["Datum / Uhrzeit"] = inputTime
             fet.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(startLon, startLat)))
