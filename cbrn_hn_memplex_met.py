@@ -21,7 +21,7 @@
  *                                                                         *
  ***************************************************************************/
 """
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QVariant
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QVariant,QDateTime
 from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import QAction, QApplication
 from qgis.core import Qgis, QgsVectorLayer, QgsFeature, QgsField, QgsGeometry, QgsPointXY, QgsProject, QgsDistanceArea, QgsLayerTreeLayer
@@ -198,7 +198,9 @@ class CBRNHNMemplexMET:
             self.dlg.map_button.clicked.connect(self._on_map_click)
             self.dlg.spread_type.clear()
             self.dlg.spread_type.addItems(["Sofortige Freisetzung", "Lachenverdampfung", "Kontinuierliche Freisetzung"])
+            self.dlg.user_datetime.setDateTime(QDateTime.currentDateTime())
             
+            # set values from config
             config = configparser.ConfigParser()
             config.read(os.path.join(os.path.dirname(__file__), "config.ini"))
             
@@ -261,6 +263,7 @@ class CBRNHNMemplexMET:
             inputLocation = self.dlg.location.text()
             inputNumber = self.dlg.number.text()
             inputSpreadType = self.dlg.spread_type.currentText()
+            inputTime = self.dlg.user_datetime.dateTime().toString("dd.MM.yyyy HH:mm:ss")
 
             colorAlpha = int(255 * (int(colorAlphaPercentage) / 100))
             
@@ -335,6 +338,8 @@ class CBRNHNMemplexMET:
             dictOfLayer[distanceArea.measureArea(fet.geometry())] = vectorLayer
             
             # set start point
+            importDateTime =  datetime.now()
+
             pointLayer = QgsVectorLayer("Point", "Start", "memory")
             pointDataProvider = pointLayer.dataProvider()
             pointLayer.startEditing()
@@ -344,6 +349,7 @@ class CBRNHNMemplexMET:
                 QgsField("Adresse / Einsatzort",QVariant.String),
                 QgsField("Einsatznummer",QVariant.String),
                 QgsField("Art der Freisetzung",QVariant.String),
+                QgsField("Datum / Uhrzeit",QVariant.String),
                 ])
             pointLayer.updateFields()
             fet = QgsFeature(pointLayer.fields())
@@ -352,6 +358,7 @@ class CBRNHNMemplexMET:
             fet["Adresse / Einsatzort"] = inputLocation
             fet["Einsatznummer"] = inputNumber
             fet["Art der Freisetzung"] = inputSpreadType
+            fet["Datum / Uhrzeit"] = inputTime
             fet.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(startLon, startLat)))
             pointDataProvider.addFeatures( [fet] )
             pointLayer.renderer().symbol().symbolLayer(0).setColor(QColor(0,0,0,255))
@@ -360,7 +367,7 @@ class CBRNHNMemplexMET:
 
             # sorting and add to project
             layerRoot = QgsProject.instance().layerTreeRoot()
-            dt_string = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            dt_string = importDateTime.strftime("%Y-%m-%d_%H-%M-%S")
             metGroup = layerRoot.insertGroup(0,"MET_"+dt_string)
 
             for key in sorted(dictOfLayer.keys(), reverse=True):
